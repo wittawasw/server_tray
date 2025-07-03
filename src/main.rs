@@ -63,6 +63,7 @@ fn main() {
                 handle.stop();
             } else if m_evt.id == m_exit.id() {
                 log::write_log_line("Exit clicked");
+                handle.stop();
                 std::process::exit(0);
             }
         }
