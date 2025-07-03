@@ -7,20 +7,15 @@ use tray_icon::{
     TrayIconBuilder, Icon,
     menu::{Menu, MenuItem, PredefinedMenuItem, MenuEvent},
 };
-use image::ImageReader;
 use tao::event_loop::{EventLoop, ControlFlow};
 
-fn load_icon(path: &str) -> Icon {
-    log::write_log_line("Loading icon");
-    let img = match ImageReader::open(path) {
-        Ok(reader) => reader.decode().unwrap().to_rgba8(),
-        Err(e) => {
-            log::write_log_line(&format!("Icon load failed: {:?}", e));
-            std::process::exit(1);
-        }
-    };
+fn load_icon() -> Icon {
+    log::write_log_line("Loading embedded icon");
+    let img = image::load_from_memory(include_bytes!("../icon.ico"))
+        .unwrap()
+        .to_rgba8();
     let (w, h) = img.dimensions();
-    log::write_log_line("Icon loaded successfully");
+    log::write_log_line("Embedded icon loaded successfully");
     Icon::from_rgba(img.into_raw(), w, h).unwrap()
 }
 
@@ -47,7 +42,7 @@ fn main() {
     menu.append(&m_exit).unwrap();
 
     let _tray = TrayIconBuilder::new()
-        .with_icon(load_icon("icon.ico"))
+        .with_icon(load_icon())
         .with_menu(Box::new(menu.clone()))
         .with_tooltip("Rust Tray Server")
         .build()
@@ -70,7 +65,6 @@ fn main() {
                 log::write_log_line("Exit clicked");
                 std::process::exit(0);
             }
-
         }
     });
 }
