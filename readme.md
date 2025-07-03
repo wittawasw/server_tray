@@ -24,3 +24,7 @@ sudo apt install libgtk-3-dev libappindicator3-dev libgdk-pixbuf2.0-dev libpango
 # In Linux
 export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
 ```
+
+## Acknowledgement
+
+- [icon's source](https://icon-icons.com/icon/on-internet-connection-connecting-cloud-network/266999)
