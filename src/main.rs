@@ -1,6 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod server;
+mod card;
 mod log;
 
 use tray_icon::{
@@ -50,6 +51,7 @@ fn main() {
     log::write_log_line("Tray built successfully");
 
     let handle = server::ServerHandle::new();
+    let card_listener = card::CardListener::new();
 
     event_loop.run(move |_, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -59,10 +61,13 @@ fn main() {
 
             if m_evt.id == m_start.id() {
                 handle.start();
+                card_listener.start();
             } else if m_evt.id == m_stop.id() {
+                card_listener.stop();
                 handle.stop();
             } else if m_evt.id == m_exit.id() {
                 log::write_log_line("Exit clicked");
+                card_listener.stop();
                 handle.stop();
                 std::process::exit(0);
             }

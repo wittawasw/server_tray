@@ -11,6 +11,7 @@ crossbeam-channel = "0.5"
 image = "0.25.6"
 chrono = "0.4.41"
 tao = "0.34.0"
+pcsc = "2.9.0"
 
 [target.x86_64-pc-windows-gnu]
 rustflags = ["-C", "link-args=-Wl,--subsystem,windows"]
