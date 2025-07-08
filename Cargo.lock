@@ -2322,6 +2322,7 @@ dependencies = [
  "chrono",
  "crossbeam-channel",
  "image",
+ "once_cell",
  "pcsc",
  "tao",
  "tokio",
