@@ -3,7 +3,8 @@
 ## Build
 
 ```sh
-cargo build
+# Tested in MacOS
+cargo build --release
 
 # Window
 cargo rustc --release -- -C link-args=/SUBSYSTEM:WINDOWS
