@@ -55,13 +55,19 @@ impl CardListener {
                             match ctx.connect(reader_cstr, pcsc::ShareMode::Shared, pcsc::Protocols::ANY) {
                                 Ok(mut _card) => {
                                     log::write_log_line("Card inserted, reading...");
-                                    thai_id::read_thai_id();
-                                    // match thai_id::read_thai_id() {
-                                    //     Ok(_) => log::write_log_line("Thai ID read success"),
-                                    //     Err(e) => log::write_log_line(&format!("Thai ID read error: {:?}", e)),
-                                    // }
+                                    let info = thai_id::read_thai_id();
+                                    log::write_log_line(&format!("CID: {}", info.cid));
+                                    log::write_log_line(&format!("TH Name: {}", info.th_name));
+                                    log::write_log_line(&format!("EN Name: {}", info.en_name));
+                                    log::write_log_line(&format!("Birth: {}", info.birth));
+                                    log::write_log_line(&format!("Gender: {}", info.gender));
+                                    log::write_log_line(&format!("Issuer: {}", info.issuer));
+                                    log::write_log_line(&format!("Issue Date: {}", info.issue_date));
+                                    log::write_log_line(&format!("Expire Date: {}", info.expire_date));
+                                    log::write_log_line(&format!("Address: {}", info.address));
+                                    log::write_log_line(&format!("Photo (partial): {}...", &info.photo_base64[..60]));
                                 }
-                                Err(Error::NoSmartcard) => {} // Ignore empty slots
+                                Err(Error::NoSmartcard) => {}
                                 Err(e) => {
                                     log::write_log_line(&format!("Card connect error: {}", e));
                                 }
