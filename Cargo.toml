@@ -14,6 +14,7 @@ tao = "0.34.0"
 pcsc = "2.9.0"
 once_cell = "1.21.3"
 base64 = "0.22.1"
+askama = "0.14.0"
 
 [target.x86_64-pc-windows-gnu]
 rustflags = ["-C", "link-args=-Wl,--subsystem,windows"]
