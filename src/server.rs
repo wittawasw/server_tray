@@ -1,21 +1,26 @@
-use crate::log;
-use std::{
-    sync::{Arc, Mutex},
-    thread,
-};
+use askama::Template;
+use std::{net::SocketAddr, path::PathBuf, sync::{Arc, Mutex}, thread};
 use tokio::{runtime::Runtime, sync::oneshot};
-use warp::Filter;
+use warp::{Filter, Rejection, Reply};
+
+#[derive(Clone)]
+pub struct ServerConfig {
+    pub static_dir: PathBuf,
+    pub address: SocketAddr,
+}
 
 pub struct ServerHandle {
     handle: Arc<Mutex<Option<thread::JoinHandle<()>>>>,
     shutdown_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    config: ServerConfig,
 }
 
 impl ServerHandle {
-    pub fn new() -> Self {
+    pub fn new(config: ServerConfig) -> Self {
         Self {
             handle: Arc::new(Mutex::new(None)),
             shutdown_tx: Arc::new(Mutex::new(None)),
+            config,
         }
     }
 
@@ -23,18 +28,22 @@ impl ServerHandle {
         let mut handle_guard = self.handle.lock().unwrap();
         if handle_guard.is_some() { return }
 
-        log::write_log_line("Starting server");
-
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         *self.shutdown_tx.lock().unwrap() = Some(shutdown_tx);
+        let config = self.config.clone();
 
         let h = thread::spawn(move || {
             let rt = Runtime::new().unwrap();
             rt.block_on(async {
-                let route = warp::path::end().map(|| "Hello!");
+                let html_route = warp::path::end().and_then(render_home);
 
-                let (_addr, server) = warp::serve(route)
-                    .bind_with_graceful_shutdown(([127, 0, 0, 1], 8080), async {
+                let static_route = warp::path("assets")
+                    .and(warp::fs::dir(config.static_dir.clone()));
+
+                let routes = html_route.or(static_route);
+
+                let (_, server) = warp::serve(routes)
+                    .bind_with_graceful_shutdown(config.address, async {
                         shutdown_rx.await.ok();
                     });
 
@@ -51,15 +60,21 @@ impl ServerHandle {
 
         if let Some(tx) = shutdown_guard.take() {
             let _ = tx.send(());
-            log::write_log_line("Shutdown signal sent");
-        } else {
-            log::write_log_line("Server not running");
-            return;
         }
 
         if let Some(h) = handle_guard.take() {
             let _ = h.join();
-            log::write_log_line("Server stopped");
         }
     }
+}
+
+#[derive(Template)]
+#[template(path = "index.html")]
+struct HomeTemplate<'a> {
+    application_name: &'a str,
+}
+
+async fn render_home() -> Result<impl Reply, Rejection> {
+    let template = HomeTemplate { application_name: "Server Tray" };
+    Ok(warp::reply::html(template.render().unwrap()))
 }
