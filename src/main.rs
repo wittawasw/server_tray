@@ -10,6 +10,8 @@ use tray_icon::{
     menu::{Menu, MenuItem, PredefinedMenuItem, MenuEvent},
 };
 use tao::event_loop::{EventLoop, ControlFlow};
+use std::{net::SocketAddr, path::PathBuf};
+use crate::server::{ServerHandle, ServerConfig};
 
 fn load_icon() -> Icon {
     log::write_log_line("Loading embedded icon");
@@ -51,7 +53,12 @@ fn main() {
         .unwrap();
     log::write_log_line("Tray built successfully");
 
-    let handle = server::ServerHandle::new();
+    let config = ServerConfig {
+        static_dir: PathBuf::from("assets"),
+        address: SocketAddr::from(([127, 0, 0, 1], 8080)),
+    };
+
+    let handle = ServerHandle::new(config);
     let card_listener = card::CardListener::new();
 
     event_loop.run(move |_, _, control_flow| {
