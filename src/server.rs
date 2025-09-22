@@ -1,3 +1,4 @@
+// server.rs
 use askama::Template;
 use std::{net::SocketAddr, path::PathBuf, sync::{Arc, Mutex}, thread};
 use tokio::{runtime::Runtime, sync::oneshot};
@@ -9,6 +10,7 @@ pub struct ServerConfig {
     pub address: SocketAddr,
 }
 
+#[derive(Clone)]
 pub struct ServerHandle {
     handle: Arc<Mutex<Option<thread::JoinHandle<()>>>>,
     shutdown_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
@@ -44,7 +46,7 @@ impl ServerHandle {
 
                 let (_, server) = warp::serve(routes)
                     .bind_with_graceful_shutdown(config.address, async {
-                        shutdown_rx.await.ok();
+                        let _ = shutdown_rx.await;
                     });
 
                 server.await;
@@ -65,6 +67,14 @@ impl ServerHandle {
         if let Some(h) = handle_guard.take() {
             let _ = h.join();
         }
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.handle.lock().unwrap().is_some()
+    }
+
+    pub fn address(&self) -> SocketAddr {
+        self.config.address
     }
 }
 
