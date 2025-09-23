@@ -88,7 +88,7 @@ fn refresh_menu(tray: &TrayIcon, running: bool, addr: SocketAddr, state: &Arc<Mu
     let mut st = state.lock().unwrap();
     let mut ids = MenuIds::default();
     let menu = build_menu(running, addr, &mut ids);
-    tray.set_menu(Box::new(menu.clone())).unwrap(); // keep our own clone alive
+    tray.set_menu(Some(Box::new(menu.clone())));
     st.ids = ids;
     st.menu = Some(menu);
     log::write_log_line("Tray menu refreshed");
@@ -127,7 +127,6 @@ fn main() {
         move |_, _, control_flow| {
             *control_flow = ControlFlow::Wait;
 
-            // inside event_loop.run
         while let Ok(m_evt) = MenuEvent::receiver().try_recv() {
             log::write_log_line(&format!("Menu: {:?}", m_evt.id));
 
