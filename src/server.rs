@@ -88,3 +88,24 @@ async fn render_home() -> Result<impl Reply, Rejection> {
     let template = HomeTemplate { application_name: "Server Tray" };
     Ok(warp::reply::html(template.render().unwrap()))
 }
+
+pub fn run_blocking(config: ServerConfig) {
+    let rt = Runtime::new().unwrap();
+    rt.block_on(async move {
+        let html_route = warp::path::end().and_then(render_home);
+
+        let static_route = warp::path("assets")
+            .and(warp::fs::dir(config.static_dir.clone()));
+
+        let routes = html_route.or(static_route);
+
+        let (_, server) = warp::serve(routes).bind_with_graceful_shutdown(
+            config.address,
+            async {
+                let _ = tokio::signal::ctrl_c().await;
+            },
+        );
+
+        server.await;
+    });
+}
