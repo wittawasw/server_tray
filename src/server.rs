@@ -1,7 +1,19 @@
-// server.rs
 use askama::Template;
-use sea_orm::{entity::*, Database, DatabaseConnection, DeriveEntityModel, DeriveRelation, DerivePrimaryKey, EnumIter, Set};
-use std::{net::SocketAddr, path::PathBuf, sync::{Arc, Mutex}, thread};
+use sea_orm::{
+    Database, DatabaseConnection, DerivePrimaryKey, DeriveEntityModel, DeriveRelation, EnumIter, Set, entity::*,
+    // query::*,
+};
+use sea_orm_migration::{
+    prelude::{MigrationTrait, SchemaManager, Table, Iden, DeriveMigrationName},
+    sea_query, sea_query::ColumnDef,
+};
+use std::{
+    fs,
+    net::SocketAddr,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    thread,
+};
 use tokio::{runtime::Runtime, sync::oneshot};
 use warp::{Filter, Rejection, Reply};
 
@@ -19,7 +31,8 @@ pub struct ServerHandle {
     config: ServerConfig,
 }
 
-#[derive(serde::Serialize, Clone, Debug, DeriveEntityModel)]
+// Product Entity
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, serde::Serialize, serde::Deserialize)]
 #[sea_orm(table_name = "products")]
 pub struct Model {
     #[sea_orm(primary_key)]
@@ -33,6 +46,48 @@ pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}
 
+// Migration
+#[derive(DeriveMigrationName)]
+pub struct ProductMigration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for ProductMigration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), sea_orm_migration::DbErr> {
+        manager
+            .create_table(
+                Table::create()
+                    .table(Products::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(Products::Id)
+                            .integer()
+                            .not_null()
+                            .auto_increment()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(Products::Name).string().not_null())
+                    .col(ColumnDef::new(Products::Quantity).integer().not_null())
+                    .to_owned(),
+            )
+            .await
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), sea_orm_migration::DbErr> {
+        manager
+            .drop_table(Table::drop().table(Products::Table).to_owned())
+            .await
+    }
+}
+
+#[derive(Iden)]
+enum Products {
+    Table,
+    Id,
+    Name,
+    Quantity,
+}
+
+// Server Handle
 impl ServerHandle {
     pub fn new(config: ServerConfig) -> Self {
         Self {
@@ -44,7 +99,9 @@ impl ServerHandle {
 
     pub fn start(&self) {
         let mut handle_guard = self.handle.lock().unwrap();
-        if handle_guard.is_some() { return }
+        if handle_guard.is_some() {
+            return;
+        }
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         *self.shutdown_tx.lock().unwrap() = Some(shutdown_tx);
@@ -53,8 +110,23 @@ impl ServerHandle {
         let h = thread::spawn(move || {
             let rt = Runtime::new().unwrap();
             rt.block_on(async {
-                let db = Database::connect(format!("sqlite://{}", config.db_path)).await.unwrap();
+                // --- Ensure DB file exists
+                if !PathBuf::from(&config.db_path).exists() {
+                    if let Some(parent) = PathBuf::from(&config.db_path).parent() {
+                        fs::create_dir_all(parent).unwrap();
+                    }
+                    fs::File::create(&config.db_path).unwrap();
+                }
 
+                let db = Database::connect(format!("sqlite://{}", config.db_path))
+                    .await
+                    .expect("DB connection failed");
+
+                // --- Run migration automatically
+                let schema_manager = SchemaManager::new(&db);
+                ProductMigration.up(&schema_manager).await.unwrap();
+
+                // --- Routes
                 let html_route = warp::path::end().and_then(render_home);
 
                 let api = warp::path("api");
@@ -76,8 +148,8 @@ impl ServerHandle {
                     .or(api.and(add_product))
                     .or(warp::path("assets").and(warp::fs::dir(config.static_dir.clone())));
 
-                let (_, server) = warp::serve(routes)
-                    .bind_with_graceful_shutdown(config.address, async {
+                let (_, server) =
+                    warp::serve(routes).bind_with_graceful_shutdown(config.address, async {
                         let _ = shutdown_rx.await;
                     });
 
@@ -110,6 +182,7 @@ impl ServerHandle {
     }
 }
 
+// HTML Rendering + CRUD
 #[derive(Template)]
 #[template(path = "index.html")]
 struct HomeTemplate<'a> {
@@ -117,11 +190,11 @@ struct HomeTemplate<'a> {
 }
 
 async fn render_home() -> Result<impl Reply, Rejection> {
-    let template = HomeTemplate { application_name: "Simple Shop" };
+    let template = HomeTemplate {
+        application_name: "Simple Shop",
+    };
     Ok(warp::reply::html(template.render().unwrap()))
 }
-
-// ========== CRUD Handlers ==========
 
 async fn get_products(db: DatabaseConnection) -> Result<impl Reply, Rejection> {
     let products = Entity::find().all(&db).await.unwrap();
@@ -144,27 +217,39 @@ async fn add_product(new: NewProduct, db: DatabaseConnection) -> Result<impl Rep
     Ok(warp::reply::json(&res))
 }
 
-pub fn run_blocking(config: ServerConfig) {
-    let rt = Runtime::new().unwrap();
-    rt.block_on(async move {
-        let db = Database::connect(format!("sqlite://{}", config.db_path)).await.unwrap();
+// runner
+// pub fn run_blocking(config: ServerConfig) {
+//     let rt = Runtime::new().unwrap();
+//     rt.block_on(async move {
+//         if !PathBuf::from(&config.db_path).exists() {
+//             if let Some(parent) = PathBuf::from(&config.db_path).parent() {
+//                 fs::create_dir_all(parent).unwrap();
+//             }
+//             fs::File::create(&config.db_path).unwrap();
+//         }
 
-        let html_route = warp::path::end().and_then(render_home);
+//         let db = Database::connect(format!("sqlite://{}", config.db_path))
+//             .await
+//             .expect("DB connection failed");
 
-        let db_filter = warp::any().map(move || db.clone());
-        let get_products = warp::path("products").and(warp::get()).and(db_filter.clone()).and_then(get_products);
+//         let schema_manager = SchemaManager::new(&db);
+//         ProductMigration.up(&schema_manager).await.unwrap();
 
-        let routes = html_route
-            .or(warp::path("api").and(get_products))
-            .or(warp::path("assets").and(warp::fs::dir(config.static_dir.clone())));
+//         let html_route = warp::path::end().and_then(render_home);
+//         let db_filter = warp::any().map(move || db.clone());
+//         let get_products = warp::path("products")
+//             .and(warp::get())
+//             .and(db_filter.clone())
+//             .and_then(get_products);
 
-        let (_, server) = warp::serve(routes).bind_with_graceful_shutdown(
-            config.address,
-            async {
-                let _ = tokio::signal::ctrl_c().await;
-            },
-        );
+//         let routes = html_route
+//             .or(warp::path("api").and(get_products))
+//             .or(warp::path("assets").and(warp::fs::dir(config.static_dir.clone())));
 
-        server.await;
-    });
-}
+//         let (_, server) = warp::serve(routes).bind_with_graceful_shutdown(config.address, async {
+//             let _ = tokio::signal::ctrl_c().await;
+//         });
+
+//         server.await;
+//     });
+// }

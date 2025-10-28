@@ -18,6 +18,8 @@ askama = "0.14.0"
 open = "5.3.2"
 sea-orm = { version = "1.1.17", features = ["macros", "runtime-tokio-rustls", "sqlx-sqlite"] }
 serde = "1.0.228"
+sea-orm-migration = "1.1.17"
+async-trait = "0.1.89"
 
 
 [target.x86_64-pc-windows-gnu]
