@@ -103,6 +103,7 @@ fn main() {
     let config = ServerConfig {
         static_dir: PathBuf::from("assets"),
         address: SocketAddr::from(([127, 0, 0, 1], 8080)),
+        db_path: "/tmp/db".to_string(),
     };
 
     let handle = ServerHandle::new(config);
