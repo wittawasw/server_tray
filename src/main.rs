@@ -10,7 +10,7 @@ use tray_icon::{
     menu::{Menu, MenuItem, PredefinedMenuItem, MenuEvent, MenuId},
 };
 use tao::event_loop::{EventLoop, ControlFlow};
-use std::{net::SocketAddr, path::PathBuf, sync::{Arc, Mutex}};
+use std::{env, net::SocketAddr, path::PathBuf, sync::{Arc, Mutex}};
 use crate::server::{ServerHandle, ServerConfig};
 
 fn load_icon() -> Icon {
@@ -100,10 +100,18 @@ fn main() {
     let event_loop = EventLoop::new();
     log::write_log_line("Event loop created");
 
+    let exe_dir = env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
+
+    let default_db_path = exe_dir.join("db.sqlite");
+
     let config = ServerConfig {
         static_dir: PathBuf::from("assets"),
         address: SocketAddr::from(([127, 0, 0, 1], 8080)),
-        db_path: "/tmp/db".to_string(),
+        db_path: default_db_path.to_string_lossy().to_string(),
     };
 
     let handle = ServerHandle::new(config);
